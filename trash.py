@@ -1,0 +1,8 @@
+if cube.R[1, 0]==0 and D[1]!=0: cube.turn("F", True)
+if cube.L[1, 2]==0 and D[1]!=0: cube.turn("F'", True)
+if cube.F[1, 0]==0 and D[3]!=0: cube.turn("L", True)
+if cube.B[1, 2]==0 and D[3]!=0: cube.turn("L'", True)
+if cube.B[1, 0]==0 and D[5]!=0: cube.turn("R", True)
+if cube.F[1, 2]==0 and D[5]!=0: cube.turn("R'", True)
+if cube.L[1, 0]==0 and D[7]!=0: cube.turn("B", True)
+if cube.R[1, 2]==0 and D[7]!=0: cube.turn("B'", True)

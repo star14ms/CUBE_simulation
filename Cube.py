@@ -29,7 +29,8 @@ def _turn(target, cmd, sides):
     return target
 
 
-def _split_cmd(cmds):
+def split_cmd(cmds):
+    cmds = cmds.replace('"',"'")
     splited_cmds = []
     cmd_start = None
     for idx, cmd in enumerate(cmds):
@@ -39,7 +40,7 @@ def _split_cmd(cmds):
             else:
                 splited_cmds.append(cmds[cmd_start:idx])
                 cmd_start = idx
-        elif cmd != ' ':
+        elif cmd not in [' ',"'",'2']:
             return [cmd, '?']
 
     splited_cmds.append(cmds[cmd_start:])
@@ -49,9 +50,8 @@ def _split_cmd(cmds):
 
 def back_cmd(cmds):
     back_cmds = []
-    splited_cmds = _split_cmd(cmds)
     
-    for cmd in reversed(splited_cmds):
+    for cmd in reversed(cmds):
         if "'" in cmd:
             new_cmd = cmd.replace("'","")
         elif "2" not in cmd:
@@ -64,15 +64,18 @@ def back_cmd(cmds):
     return back_cmds
 
 
+
 class Cube():
-    def __init__(self):
+    def __init__(self, shuffle=False):
         self.D = np.full([3, 3], 0, dtype=np.int)
         self.L = np.full([3, 3], 1, dtype=np.int)
         self.F = np.full([3, 3], 2, dtype=np.int)
         self.R = np.full([3, 3], 3, dtype=np.int)
         self.B = np.full([3, 3], 4, dtype=np.int)
         self.U = np.full([3, 3], 5, dtype=np.int)
-        self.side = {'D':self.D, 'L':self.L, 'F':self.F, 'R':self.R, 'B':self.B, 'U':self.U}
+
+        if shuffle:
+            self.shuffle()
     
     
     def init(self):
@@ -107,11 +110,13 @@ class Cube():
             '       ' + str(self.D[0]) + '\n' + '       ' + str(self.D[1]) + '\n' + '       ' + str(self.D[2])
 
 
-    def turn(self, cmds, print_each_turn=False):
-        if '?' in cmds: return
+    def turn(self, cmds, verbose=True, verbose_each_turn=False):
+        if '?' in cmds: 
+            print('turn ->', ' '.join(cmds))
+            return
         if type(cmds) == str:
             cmds = _split_cmd(cmds.replace('"',"'"))
-
+        
         for cmd in cmds:
             
             cmd_0 = cmd[0].upper()
@@ -170,69 +175,91 @@ class Cube():
                     if "'" in cmd else \
                         (rotate(self.R, 1), rotate(self.D, 1), rotate(self.F, 1), rotate(self.U, 1), rotate(self.B, -1), rotate(self.L, 1))
  
-            if print_each_turn: 
-                print(self)
+            if verbose_each_turn: 
                 print(cmd)
+                print(self)
             
+        if verbose: print('turn ->', ' '.join(cmds))
 
-    def shuffle(self):
+
+    def shuffle(self, shuffle_num=32):
         cmd = ''
-        for _ in range(16):
+        for _ in range(shuffle_num):
             cmd = cmd + random.choice(['U','D','R','L','F','B'])
-        cube.turn(cmd)
+        self.turn(cmd, False)
 
-cube = Cube()
-# cube.shuffle()
-print(cube)
+
+    def find(self, side, index):
+        if side == 'D': side = self.D
+        elif side == 'L': side = self.L
+        elif side == 'F': side = self.F
+        elif side == 'R': side = self.R
+        elif side == 'B': side = self.B
+        elif side == 'U': side = self.U
+        else: return None
+
+        return side.flatten()[index]
+
+
 
 class Cuber():
-    def level_1(self):
-        global cube
-        if not np.any(cube.D.flatten()[[1, 3, 5, 7]]!=0) and \
-            False not in [side[1, 1] == side[2, 1] for side in [cube.L, cube.F, cube.R, cube.B]]:
-            print('1단계 완료!')
-            return 
-        else:
-            print(cube.D.flatten()[[1, 3, 5, 7]]!=0)
+    def fit(self, cube):
+        self.level_1(cube)
         
 
-history = []
-back_stack = 0
+    def check_level_1(self, cube):
+        if not np.any(cube.D.flatten()[[1, 3, 5, 7]]!=0) and \
+            False not in [side[1, 1] == side[2, 1] for side in [cube.L,cube.F,cube.R,cube.B]]:
+            print('1단계 완료!')
+            return True
+        else:
+            return False
 
-while True:
-    looking_history = False
-    cmds = input('돌리기: ')
-    
-    if cmds in ['init','초기화','ㅑㅜㅑㅅ','chrlghk']:
-        cube.init()
-    elif cmds in ['shuffle','섞기','shuffle','tjRrl']:
-        cube.shuffle()
-    elif cmds in ['맞춰']:
-        Cuber().level_1()
-    elif cmds in ['back','뒤로','ㅠㅁ차','enlfh']:
-        if not back_stack+1 <= len(history):
-            continue
-        back_stack += 1
-        looking_history = True
-        backcmd = back_cmd(history[-back_stack])
-        print('back ->', ' '.join(backcmd))
-        cube.turn(backcmd)
-    elif cmds in ['redo','앞으로','ㄱㄷ애','dkvdmfh']:
-        if not 0 <= back_stack-1 < len(history):
-            continue
-        looking_history = True
-        redocmd = history[-back_stack]
-        print('redo ->', ' '.join(redocmd))
-        cube.turn(redocmd)
-        back_stack -= 1
-    else:
-        print('turn ->', ' '.join(_split_cmd(cmds)))
-        cube.turn(cmds)
-    
-    if not looking_history:
-        if back_stack > 0:
-            history = history[:-back_stack]
-        history.append(cmds.replace('"',"'"))
-        back_stack = 0
+    def level_1(self, cube):
+        y = "y'" if cube.L[2, 1]==0 or cube.F[0, 1]==0 else 'y'
+        
+        plus_formula_info = [ ### U = cube.U 값을 복사했기 때문에 실제 바뀐 값이랑 연동되지 않음
+            (('R',1), ('U',5), [1, 5, 7, 3], ['F','R','B','L'], "R'FR"),
+            (('U',7), ('F',1), [1, 5, 7, 3], ['F','R','B','L'], "F2"), 
+            (('F',3), ('L',5), [3, 1, 5, 7], ['L','F','R','B'], "L"),
+            (('F',5), ('R',3), [5, 7, 3, 1], ['R','B','L','F'], "R'"),
+        ]
 
-    print(cube)
+        fit_w = 1 if np.any(cube.D.flatten()[[1, 3, 5, 7]]==0) else 0
+        while not self.check_level_1(cube):
+            for _ in range(4):
+                if cube.F[2, 1] == 0:
+                    cmd = "F'" if cube.F[1, 0]!=0 else "F"
+                    cube.turn(cmd)
+                    history.append([cmd])
+
+                for (target, target2, D_idxs, D2_sides, cmd_main) in plus_formula_info:
+                    if cube.find(*target)==0:
+                        cmd_D = ''
+                        for bias in range(4):
+                            if cube.find('D', D_idxs[bias])==0:
+                                rotate_n = (cube.find(*target2)-cube.find(D2_sides[bias], 7)+bias) % 4 # 고정된 자리 - 움직이는 자리
+                                cmd_D = ("D'"*rotate_n).replace("D'D'D'","D").replace("D'D'","D2")
+                                break
+                    
+                        cube.turn(cmd_D + cmd_main)
+                        history.append(_split_cmd(cmd_D + cmd_main))
+                        fit_w += 1
+                    if fit_w == 4: break
+                    
+                if fit_w == 4: break
+                cube.turn(y)
+                history.append([y])
+                
+            if not np.any(cube.D.flatten()[[1, 3, 5, 7]]!=0):
+                for D_idx, side in zip([3, 1, 5, 7], ['L','F','R','B']):
+                    if cube.find('D', D_idx) == 0:
+                        rotate_n = (cube.find(side, 4)-cube.find(side, 7)) % 4 # 고정된 자리 - 움직이는 자리
+                        if rotate_n == 0: break
+                        cmd_D = ("D'"*rotate_n).replace("D'D'D'","D").replace("D'D'","D2")
+                        cube.turn(cmd_D)
+                        history.append([cmd_D])
+                        break
+
+
+
