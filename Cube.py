@@ -12,9 +12,8 @@ def _turn(target, cmd, sides):
     
     height = 0 if cmd_0==side0 else 1 if cmd_0==side1 else 2
     
-    if ("'" in cmd and (cmd_0==side0 or (not cmd_0==side1 and not cmd_0==side2))) or (
-        not "'" in cmd and (not cmd_0==side0 and (cmd_0==side1 or cmd_0==side2))
-    ):
+    if ("'" in cmd and (cmd_0==side0 or cmd_0==side1) or (
+        not "'" in cmd and cmd_0==side2)):
         move = -6 if '2' in cmd else -3
     else:
         move = 6 if '2' in cmd else 3
@@ -29,17 +28,18 @@ def _turn(target, cmd, sides):
     return target
 
 
-def _split_cmd(cmds):
+def split_cmd(cmds):
+    cmds = cmds.replace('"',"'").replace(' ','')
     splited_cmds = []
     cmd_start = None
     for idx, cmd in enumerate(cmds):
-        if cmd in ['U','E','D','R','M','L','F','S','B','x','y','z','u','d','r','l','f','b']:
+        if cmd in ['U','E','D','R','M','L','F','S','B','x','y','z','u','d','r','l','f','b','-']:
             if cmd_start == None:
                 cmd_start = idx
             else:
                 splited_cmds.append(cmds[cmd_start:idx])
                 cmd_start = idx
-        elif cmd != ' ':
+        elif cmd not in ["'",'2']:
             return [cmd, '?']
 
     splited_cmds.append(cmds[cmd_start:])
@@ -49,9 +49,8 @@ def _split_cmd(cmds):
 
 def back_cmd(cmds):
     back_cmds = []
-    splited_cmds = _split_cmd(cmds)
     
-    for cmd in reversed(splited_cmds):
+    for cmd in reversed(cmds):
         if "'" in cmd:
             new_cmd = cmd.replace("'","")
         elif "2" not in cmd:
@@ -64,15 +63,46 @@ def back_cmd(cmds):
     return back_cmds
 
 
+
 class Cube():
-    def __init__(self):
+    def __init__(self, shuffle=False, shuffle_seed=''):
         self.D = np.full([3, 3], 0, dtype=np.int)
         self.L = np.full([3, 3], 1, dtype=np.int)
         self.F = np.full([3, 3], 2, dtype=np.int)
         self.R = np.full([3, 3], 3, dtype=np.int)
         self.B = np.full([3, 3], 4, dtype=np.int)
         self.U = np.full([3, 3], 5, dtype=np.int)
-        self.side = {'D':self.D, 'L':self.L, 'F':self.F, 'R':self.R, 'B':self.B, 'U':self.U}
+        self.seed = ''
+        self.history = []
+        self.pre_not_verbose = False
+
+        # self.U = np.array(
+            # [5,2,1,
+            #  4,5,1,
+            #  0,1,2]).reshape(3,3)
+        # self.L = np.array(
+            # [2,5,4,
+            #  4,4,1,
+            #  3,2,4]).reshape(3,3)
+        # self.F = np.array(
+            # [3,2,0,
+            #  0,1,4,
+            #  5,3,0]).reshape(3,3)
+        # self.R = np.array(
+            # [3,4,4,
+            #  0,2,3,
+            #  1,2,3]).reshape(3,3)
+        # self.B = np.array(
+            # [0,3,1,
+            #  0,3,3,
+            #  5,5,5]).reshape(3,3)
+        # self.D = np.array(
+            # [1,5,2,
+            #  0,0,5,
+            #  2,1,4]).reshape(3,3)
+
+        if shuffle:
+            self.shuffle(shuffle_seed)
     
     
     def init(self):
@@ -107,32 +137,36 @@ class Cube():
             '       ' + str(self.D[0]) + '\n' + '       ' + str(self.D[1]) + '\n' + '       ' + str(self.D[2])
 
 
-    def turn(self, cmds, print_each_turn=False):
-        if '?' in cmds: return
+    def turn(self, cmds, verbose=True, Case_Name=None, verbose_each_turn=False, add_history=True):
+        if '?' in cmds: 
+            print('turn ->',
+             ' '.join(cmds))
+            return
         if type(cmds) == str:
-            cmds = _split_cmd(cmds.replace('"',"'"))
-
+            cmds = split_cmd(cmds.replace('"',"'"))
+        
         for cmd in cmds:
             
             cmd_0 = cmd[0].upper()
             
-            if cmd_0 in ['U','E','D']:
-                target = np.concatenate([self.L, self.F, self.R, self.B], axis=1)
+            if cmd_0 in ['D','E','U']:
+                target = np.concatenate([rotate(self.R,2), rotate(self.F,2), rotate(self.L,2), rotate(self.B,2)], axis=1)
 
-                target = _turn(target, cmd, sides=['U','E','D'])
-                self.L, self.F, self.R, self.B = np.hsplit(target, [3, 6, 9])
+                target = _turn(target, cmd, sides=['D','E','U'])
+                R, F, L, B = np.hsplit(target, [3, 6, 9])
+                self.R, self.F, self.L, self.B = rotate(R,2), rotate(F,2), rotate(L,2), rotate(B,2)
 
                 if cmd_0=='U':
                     self.U = rotate(self.U, (-1 if "'" in cmd else 2 if '2' in cmd else 1))
                 if cmd_0=='D':
                     self.D = rotate(self.D, (-1 if "'" in cmd else 2 if '2' in cmd else 1))
 
-            if cmd_0 in ['R','M','L']:
-                target = np.concatenate([rotate(self.B, 1), rotate(self.U, -1), rotate(self.F, -1), rotate(self.D, -1)], axis=1)
+            if cmd_0 in ['L','M','R']:
+                target = np.concatenate([rotate(self.F, 1), rotate(self.U, 1), rotate(self.B, -1), rotate(self.D, 1)], axis=1)
                 
-                target = _turn(target, cmd, sides=['R','M','L'])
-                B, U, F, D = np.hsplit(target, [3, 6, 9])
-                self.B, self.U, self.F, self.D = rotate(B, -1), rotate(U, 1), rotate(F, 1), rotate(D, 1)
+                target = _turn(target, cmd, sides=['L','M','R'])
+                F, U, B, D = np.hsplit(target, [3, 6, 9])
+                self.F, self.U, self.B, self.D = rotate(F, -1), rotate(U, -1), rotate(B, 1), rotate(D, -1)
 
                 if cmd_0=='L':
                     self.L = rotate(self.L, (-1 if "'" in cmd else 2 if '2' in cmd else 1))
@@ -170,69 +204,47 @@ class Cube():
                     if "'" in cmd else \
                         (rotate(self.R, 1), rotate(self.D, 1), rotate(self.F, 1), rotate(self.U, 1), rotate(self.B, -1), rotate(self.L, 1))
  
-            if print_each_turn: 
-                print(self)
+            if verbose_each_turn: 
                 print(cmd)
+                print(self)
             
-
-    def shuffle(self):
-        cmd = ''
-        for _ in range(16):
-            cmd = cmd + random.choice(['U','D','R','L','F','B'])
-        cube.turn(cmd)
-
-cube = Cube()
-# cube.shuffle()
-print(cube)
-
-class Cuber():
-    def level_1(self):
-        global cube
-        if not np.any(cube.D.flatten()[[1, 3, 5, 7]]!=0) and \
-            False not in [side[1, 1] == side[2, 1] for side in [cube.L, cube.F, cube.R, cube.B]]:
-            print('1단계 완료!')
-            return 
+        if verbose: 
+            if self.pre_not_verbose: 
+                print('turn -> '+' '.join(self.history[-1]))
+                self.pre_not_verbose = False
+            print('turn -> '+(bcolors.WARNING if Case_Name!=None else bcolors.BOLD)+ \
+            ' '.join(cmds), f'({Case_Name})' if Case_Name!=None else '', bcolors.ENDC)
         else:
-            print(cube.D.flatten()[[1, 3, 5, 7]]!=0)
-        
+            self.pre_not_verbose = True
 
-history = []
-back_stack = 0
+        if not add_history: return
 
-while True:
-    looking_history = False
-    cmds = input('돌리기: ')
-    
-    if cmds in ['init','초기화','ㅑㅜㅑㅅ','chrlghk']:
-        cube.init()
-    elif cmds in ['shuffle','섞기','shuffle','tjRrl']:
-        cube.shuffle()
-    elif cmds in ['맞춰']:
-        Cuber().level_1()
-    elif cmds in ['back','뒤로','ㅠㅁ차','enlfh']:
-        if not back_stack+1 <= len(history):
-            continue
-        back_stack += 1
-        looking_history = True
-        backcmd = back_cmd(history[-back_stack])
-        print('back ->', ' '.join(backcmd))
-        cube.turn(backcmd)
-    elif cmds in ['redo','앞으로','ㄱㄷ애','dkvdmfh']:
-        if not 0 <= back_stack-1 < len(history):
-            continue
-        looking_history = True
-        redocmd = history[-back_stack]
-        print('redo ->', ' '.join(redocmd))
-        cube.turn(redocmd)
-        back_stack -= 1
-    else:
-        print('turn ->', ' '.join(_split_cmd(cmds)))
-        cube.turn(cmds)
-    
-    if not looking_history:
-        if back_stack > 0:
-            history = history[:-back_stack]
-        history.append(cmds.replace('"',"'"))
-        back_stack = 0
+        if len(self.history)==0 or cmds not in [["y"],["y'"]] or \
+            self.history[-1] not in [["y"],["y y"],["y y y"],["y'"],["y' y'"],["y' y' y'"]]:
+            self.history.append(cmds)
+        elif cmds==["y"]:
+            self.history[-1] = [self.history[-1][0] + " y"]
+        elif cmds==["y'"]:
+            self.history[-1] = [self.history[-1][0] + " y'"]
 
-    print(cube)
+
+    def shuffle(self, cmd='', shuffle_num=32):
+        if cmd=='':
+            for _ in range(shuffle_num):
+                cmd = cmd + random.choice(['U','D','R','L','F','B'])
+        self.turn(cmd, verbose=False, add_history=False)
+        print('shuffle ->', cmd)
+        self.seed = cmd
+        self.pre_not_verbose = False
+
+
+    def __call__(self, side, index):
+        if   side == 'D': side = self.D
+        elif side == 'L': side = self.L
+        elif side == 'F': side = self.F
+        elif side == 'R': side = self.R
+        elif side == 'B': side = self.B
+        elif side == 'U': side = self.U
+        else: return None
+
+        return side.flatten()[index]
